@@ -104,7 +104,7 @@ function TransactionsPage() {
                             : "bg-surface text-white/70"
                         }`}
                       >
-                        <Icon className="size-4.5" strokeWidth={1.8} />
+                        <Icon className="size-[18px]" strokeWidth={1.8} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{t.merchant}</p>
