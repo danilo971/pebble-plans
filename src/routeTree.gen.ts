@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TransactionsRouteImport } from './routes/transactions'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as CardsRouteImport } from './routes/cards'
 import { Route as AddRouteImport } from './routes/add'
@@ -18,6 +19,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const TransactionsRoute = TransactionsRouteImport.update({
   id: '/transactions',
   path: '/transactions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProfileRoute = ProfileRouteImport.update({
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/add': typeof AddRoute
   '/cards': typeof CardsRoute
   '/profile': typeof ProfileRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/transactions': typeof TransactionsRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/add': typeof AddRoute
   '/cards': typeof CardsRoute
   '/profile': typeof ProfileRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/transactions': typeof TransactionsRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,28 @@ export interface FileRoutesById {
   '/add': typeof AddRoute
   '/cards': typeof CardsRoute
   '/profile': typeof ProfileRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/transactions': typeof TransactionsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/add' | '/cards' | '/profile' | '/transactions'
+  fullPaths:
+    | '/'
+    | '/add'
+    | '/cards'
+    | '/profile'
+    | '/sitemap.xml'
+    | '/transactions'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/add' | '/cards' | '/profile' | '/transactions'
-  id: '__root__' | '/' | '/add' | '/cards' | '/profile' | '/transactions'
+  to: '/' | '/add' | '/cards' | '/profile' | '/sitemap.xml' | '/transactions'
+  id:
+    | '__root__'
+    | '/'
+    | '/add'
+    | '/cards'
+    | '/profile'
+    | '/sitemap.xml'
+    | '/transactions'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +98,7 @@ export interface RootRouteChildren {
   AddRoute: typeof AddRoute
   CardsRoute: typeof CardsRoute
   ProfileRoute: typeof ProfileRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TransactionsRoute: typeof TransactionsRoute
 }
 
@@ -86,6 +109,13 @@ declare module '@tanstack/react-router' {
       path: '/transactions'
       fullPath: '/transactions'
       preLoaderRoute: typeof TransactionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/profile': {
@@ -124,6 +154,7 @@ const rootRouteChildren: RootRouteChildren = {
   AddRoute: AddRoute,
   CardsRoute: CardsRoute,
   ProfileRoute: ProfileRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   TransactionsRoute: TransactionsRoute,
 }
 export const routeTree = rootRouteImport
