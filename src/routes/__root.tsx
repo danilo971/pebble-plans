@@ -87,16 +87,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Cifra: um app premium para controlar receitas, despesas, cartões, metas e investimentos com clareza absoluta.",
+          "Cifra: gerencie receitas, despesas, cartões e metas em um app financeiro premium e minimalista.",
       },
       { property: "og:title", content: "Cifra — Controle financeiro pessoal" },
       {
         property: "og:description",
         content:
-          "Uma experiência premium para entender exatamente para onde seu dinheiro vai.",
+          "Cifra: gerencie receitas, despesas, cartões e metas em um app financeiro premium e minimalista.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Cifra — Controle financeiro pessoal" },
+      { name: "twitter:description", content: "Cifra: gerencie receitas, despesas, cartões e metas em um app financeiro premium e minimalista." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/555be9ad-308d-4727-bf83-f48d56a1f312/id-preview-5d8c9e14--d192ed33-e48c-4a94-83a2-9f1fba1165c1.lovable.app-1784434006932.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/555be9ad-308d-4727-bf83-f48d56a1f312/id-preview-5d8c9e14--d192ed33-e48c-4a94-83a2-9f1fba1165c1.lovable.app-1784434006932.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

@@ -34,7 +34,7 @@ export const Route = createFileRoute("/")({
       {
         property: "og:description",
         content:
-          "Uma experiência premium para você entender exatamente para onde seu dinheiro vai.",
+          "Cifra: gerencie receitas, despesas, cartões e metas em um app financeiro premium e minimalista.",
       },
     ],
   }),
