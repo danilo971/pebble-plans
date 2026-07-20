@@ -1,0 +1,71 @@
+version: "3.9"
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: cifra-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cifra
+      POSTGRES_PASSWORD: cifra_dev_secret
+      POSTGRES_DB: cifra
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cifra -d cifra"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Backend API
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile
+    container_name: cifra-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://cifra:cifra_dev_secret@db:5432/cifra
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-very-long-secret-at-least-32-chars}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-change-me-refresh-token-secret-32-chars-min}
+      ACCESS_TOKEN_EXPIRES_IN: 15m
+      REFRESH_TOKEN_EXPIRES_IN: 7d
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      LOG_LEVEL: info
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health/live"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Database migrations service (runs once on startup)
+  migrations:
+    image: node:22-alpine
+    container_name: cifra-migrations
+    depends_on:
+      db:
+        condition: service_healthy
+    working_dir: /app
+    volumes:
+      - ./src/backend:/app
+    environment:
+      DATABASE_URL: postgresql://cifra:cifra_dev_secret@db:5432/cifra
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-very-long-secret-at-least-32-chars}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-change-me-refresh-token-secret-32-chars-min}
+    command: sh -c "npm ci && npx drizzle-kit push --force && echo 'Migrations applied successfully'"
+    restart: "no"
+
+volumes:
+  pgdata:
