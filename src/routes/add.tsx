@@ -1,8 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Calendar, Camera, Tag, Wallet, Check } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Calendar, Tag, Wallet, Check, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { MobileShell } from "@/components/finance/MobileShell";
-import { categories } from "@/lib/finance-data";
+import { iconFor } from "@/lib/finance-data";
+import { useAuth } from "@/hooks/use-auth";
+import { useAccounts, useCategories, useCreateTransaction } from "@/lib/finance-queries";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/add")({
@@ -10,6 +12,11 @@ export const Route = createFileRoute("/add")({
     meta: [
       { title: "Nova transação — Cifra" },
       { name: "description", content: "Registre receitas e despesas em segundos." },
+      { property: "og:title", content: "Nova transação — Cifra" },
+      {
+        property: "og:description",
+        content: "Registre receitas e despesas em segundos no Cifra.",
+      },
     ],
   }),
   component: AddTransactionPage,
@@ -23,14 +30,56 @@ const kinds = [
 
 function AddTransactionPage() {
   const navigate = useNavigate();
+  const { session } = useAuth();
+  const on = !!session;
+  const { data: categories = [] } = useCategories(on);
+  const { data: accounts = [] } = useAccounts(on);
+  const createTx = useCreateTransaction();
+
   const [kind, setKind] = useState<(typeof kinds)[number]["id"]>("expense");
   const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState(categories[0].name);
+  const [category, setCategory] = useState("");
+  const [accountId, setAccountId] = useState<string>("");
   const [note, setNote] = useState("");
+
+  useEffect(() => {
+    if (!category && categories.length) setCategory(categories[0].name);
+  }, [categories, category]);
+  useEffect(() => {
+    if (!accountId && accounts.length) setAccountId(accounts[0].id);
+  }, [accounts, accountId]);
 
   const displayAmount = amount ? formatBRL(amount) : "0,00";
   const accent =
     kind === "income" ? "text-accent" : kind === "expense" ? "text-danger" : "text-info";
+
+  async function save() {
+    const value = Number(amount);
+    if (!value) {
+      toast.error("Informe um valor maior que zero");
+      return;
+    }
+    const cat = categories.find((c) => c.name === category);
+    try {
+      await createTx.mutateAsync({
+        merchant: note.trim() || category || "Movimentação",
+        category: category || "Outros",
+        icon: cat?.icon ?? "ShoppingBag",
+        amount: value,
+        kind,
+        account_id: accountId || null,
+        note: note.trim() || null,
+      });
+      toast.success("Transação registrada", {
+        description: category + " • R$ " + displayAmount,
+      });
+      navigate({ to: "/" });
+    } catch (e) {
+      toast.error("Não foi possível salvar", {
+        description: e instanceof Error ? e.message : undefined,
+      });
+    }
+  }
 
   return (
     <MobileShell>
@@ -99,12 +148,12 @@ function AddTransactionPage() {
         <div className="mt-6 space-y-2">
           <Field icon={<Tag className="size-4" />} label="Categoria">
             <div className="flex gap-2 overflow-x-auto no-scrollbar">
-              {categories.slice(0, 8).map((c) => {
-                const Icon = c.icon;
+              {categories.map((c) => {
+                const Icon = iconFor(c.icon);
                 const active = category === c.name;
                 return (
                   <button
-                    key={c.name}
+                    key={c.id}
                     onClick={() => setCategory(c.name)}
                     className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
                       active
@@ -120,16 +169,42 @@ function AddTransactionPage() {
           </Field>
 
           <Field icon={<Wallet className="size-4" />} label="Conta">
-            <span className="text-sm font-medium">Nubank Ultravioleta</span>
+            {accounts.length === 0 ? (
+              <Link to="/profile" className="text-sm font-medium text-info">
+                Cadastrar uma conta
+              </Link>
+            ) : (
+              <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                {accounts.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => setAccountId(a.id)}
+                    className={`inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-xs font-medium transition-colors ${
+                      accountId === a.id
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-white/10 text-white/70"
+                    }`}
+                  >
+                    {a.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </Field>
 
           <Field icon={<Calendar className="size-4" />} label="Data">
-            <span className="text-sm font-medium">Hoje, 20 Mar</span>
+            <span className="text-sm font-medium">
+              Hoje,{" "}
+              {new Date().toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "short",
+              })}
+            </span>
           </Field>
 
           <div className="rounded-2xl border border-white/[0.06] bg-card p-4">
             <p className="mb-2 text-[10px] uppercase tracking-widest text-white/40">
-              Observação
+              Descrição
             </p>
             <input
               value={note}
@@ -138,22 +213,19 @@ function AddTransactionPage() {
               className="w-full bg-transparent text-sm placeholder:text-white/30 focus:outline-none"
             />
           </div>
-
-          <button className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-white/10 bg-card/50 p-4 text-sm text-white/60">
-            <Camera className="size-4" /> Anexar comprovante
-          </button>
         </div>
 
         <button
-          onClick={() => {
-            toast.success("Transação registrada", {
-              description: category + " • R$ " + displayAmount,
-            });
-            navigate({ to: "/" });
-          }}
-          className="mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-accent text-base font-semibold text-accent-foreground shadow-lg shadow-accent/20 active:scale-[0.98]"
+          onClick={save}
+          disabled={createTx.isPending}
+          className="mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-accent text-base font-semibold text-accent-foreground shadow-lg shadow-accent/20 active:scale-[0.98] disabled:opacity-60"
         >
-          <Check className="size-5" strokeWidth={2.5} /> Salvar transação
+          {createTx.isPending ? (
+            <Loader2 className="size-5 animate-spin" />
+          ) : (
+            <Check className="size-5" strokeWidth={2.5} />
+          )}{" "}
+          Salvar transação
         </button>
       </div>
     </MobileShell>
@@ -183,7 +255,6 @@ function Field({
 }
 
 function formatBRL(raw: string) {
-  // raw is what user typed with digits and possibly one '.'
   const [int, dec = ""] = raw.split(".");
   const intFmt = (int || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   if (raw.includes(".")) return `${intFmt},${dec.padEnd(2, "0").slice(0, 2)}`;

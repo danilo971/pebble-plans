@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
   ChevronRight,
@@ -10,56 +10,120 @@ import {
   Globe,
   Shield,
   LogOut,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { MobileShell } from "@/components/finance/MobileShell";
-import { accounts, currency } from "@/lib/finance-data";
+import { currency } from "@/lib/finance-data";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  useAccounts,
+  useCreateAccount,
+  useDeleteAccount,
+  useProfile,
+} from "@/lib/finance-queries";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({
     meta: [
       { title: "Perfil — Cifra" },
       { name: "description", content: "Sua conta, segurança e preferências." },
+      { property: "og:title", content: "Perfil — Cifra" },
+      {
+        property: "og:description",
+        content: "Sua conta, segurança e preferências no Cifra.",
+      },
     ],
   }),
   component: ProfilePage,
 });
 
-type Row = { icon: LucideIcon; label: string; hint?: string; danger?: boolean };
-
-const sections: { title: string; rows: Row[] }[] = [
-  {
-    title: "Segurança",
-    rows: [
-      { icon: Fingerprint, label: "Biometria e PIN", hint: "Ativado" },
-      { icon: Shield, label: "Privacidade" },
-    ],
-  },
-  {
-    title: "Preferências",
-    rows: [
-      { icon: Bell, label: "Notificações" },
-      { icon: Globe, label: "Idioma & moeda", hint: "Português • BRL" },
-    ],
-  },
-  {
-    title: "Dados",
-    rows: [
-      { icon: Download, label: "Exportar (PDF, CSV)" },
-      { icon: Upload, label: "Importar movimentações" },
-    ],
-  },
-  {
-    title: "Ajuda",
-    rows: [
-      { icon: HelpCircle, label: "Central de ajuda" },
-      { icon: LogOut, label: "Sair da conta", danger: true },
-    ],
-  },
-];
+type Row = {
+  icon: LucideIcon;
+  label: string;
+  hint?: string;
+  danger?: boolean;
+  action?: () => void;
+};
 
 function ProfilePage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { session } = useAuth();
+  const on = !!session;
+  const { data: profile } = useProfile(on);
+  const { data: accounts = [] } = useAccounts(on);
+  const createAccount = useCreateAccount();
+  const removeAccount = useDeleteAccount();
+
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", kind: "Conta corrente", balance: "" });
+
   const total = accounts.reduce((s, a) => s + a.balance, 0);
+
+  async function signOut() {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
+
+  async function submitAccount() {
+    if (!form.name.trim()) {
+      toast.error("Informe o nome da conta");
+      return;
+    }
+    try {
+      await createAccount.mutateAsync({
+        name: form.name.trim(),
+        kind: form.kind || "Conta corrente",
+        balance: Number(form.balance || 0),
+      });
+      setForm({ name: "", kind: "Conta corrente", balance: "" });
+      setOpen(false);
+      toast.success("Conta adicionada");
+    } catch (e) {
+      toast.error("Não foi possível salvar a conta", {
+        description: e instanceof Error ? e.message : undefined,
+      });
+    }
+  }
+
+  const sections: { title: string; rows: Row[] }[] = [
+    {
+      title: "Segurança",
+      rows: [
+        { icon: Fingerprint, label: "Biometria e PIN", hint: "Ativado" },
+        { icon: Shield, label: "Privacidade" },
+      ],
+    },
+    {
+      title: "Preferências",
+      rows: [
+        { icon: Bell, label: "Notificações" },
+        { icon: Globe, label: "Idioma & moeda", hint: "Português • BRL" },
+      ],
+    },
+    {
+      title: "Dados",
+      rows: [
+        { icon: Download, label: "Exportar (PDF, CSV)" },
+        { icon: Upload, label: "Importar movimentações" },
+      ],
+    },
+    {
+      title: "Ajuda",
+      rows: [
+        { icon: HelpCircle, label: "Central de ajuda" },
+        { icon: LogOut, label: "Sair da conta", danger: true, action: signOut },
+      ],
+    },
+  ];
 
   return (
     <MobileShell>
@@ -77,10 +141,10 @@ function ProfilePage() {
       {/* Identity */}
       <section className="flex flex-col items-center px-5 pb-2 pt-2 text-center">
         <div className="grid size-20 place-items-center rounded-full bg-gradient-to-br from-accent/40 to-info/30 text-2xl font-semibold ring-1 ring-white/10">
-          MS
+          {profile?.avatar_initials || "CF"}
         </div>
-        <h2 className="mt-3 text-lg font-semibold">Marcus Silva</h2>
-        <p className="text-xs text-white/50">marcus@cifra.app</p>
+        <h2 className="mt-3 text-lg font-semibold">{profile?.name || "Você"}</h2>
+        <p className="text-xs text-white/50">{profile?.email || session?.user.email}</p>
       </section>
 
       {/* Accounts */}
@@ -91,7 +155,7 @@ function ProfilePage() {
         </div>
         <div className="divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-white/[0.06] bg-card">
           {accounts.map((a) => (
-            <div key={a.name} className="flex items-center gap-3 px-4 py-4">
+            <div key={a.id} className="flex items-center gap-3 px-4 py-4">
               <div className="grid size-9 place-items-center rounded-xl bg-surface text-white/70">
                 <ChevronRight className="size-4" />
               </div>
@@ -100,9 +164,56 @@ function ProfilePage() {
                 <p className="text-[11px] text-white/40">{a.kind}</p>
               </div>
               <p className="text-sm font-semibold">{currency(a.balance)}</p>
+              <button
+                onClick={() => removeAccount.mutate(a.id)}
+                aria-label={`Remover ${a.name}`}
+                className="grid size-8 place-items-center rounded-full text-white/30 active:text-danger"
+              >
+                <Trash2 className="size-4" />
+              </button>
             </div>
           ))}
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="flex w-full items-center gap-3 px-4 py-4 text-left text-sm text-white/60"
+          >
+            <div className="grid size-9 place-items-center rounded-xl bg-surface text-white/70">
+              <Plus className="size-4" />
+            </div>
+            {open ? "Cancelar" : "Adicionar conta"}
+          </button>
         </div>
+
+        {open && (
+          <div className="mt-2 space-y-2 rounded-3xl border border-white/[0.06] bg-card p-4">
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Nome da conta"
+              className="h-11 w-full rounded-2xl border border-white/[0.06] bg-surface px-3 text-sm placeholder:text-white/30 focus:outline-none"
+            />
+            <input
+              value={form.kind}
+              onChange={(e) => setForm({ ...form, kind: e.target.value })}
+              placeholder="Tipo (ex.: Conta digital)"
+              className="h-11 w-full rounded-2xl border border-white/[0.06] bg-surface px-3 text-sm placeholder:text-white/30 focus:outline-none"
+            />
+            <input
+              value={form.balance}
+              onChange={(e) => setForm({ ...form, balance: e.target.value })}
+              inputMode="decimal"
+              placeholder="Saldo inicial"
+              className="h-11 w-full rounded-2xl border border-white/[0.06] bg-surface px-3 text-sm placeholder:text-white/30 focus:outline-none"
+            />
+            <button
+              onClick={submitAccount}
+              disabled={createAccount.isPending}
+              className="h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-foreground disabled:opacity-60"
+            >
+              Salvar conta
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Settings */}
@@ -117,6 +228,7 @@ function ProfilePage() {
               return (
                 <button
                   key={r.label}
+                  onClick={r.action}
                   className={`flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-surface ${
                     r.danger ? "text-danger" : ""
                   }`}

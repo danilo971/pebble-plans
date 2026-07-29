@@ -1,24 +1,77 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Search, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { MobileShell } from "@/components/finance/MobileShell";
-import { currency, transactions } from "@/lib/finance-data";
+import { currency, dateLabel, iconFor } from "@/lib/finance-data";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  useAccounts,
+  useDeleteTransaction,
+  useTransactions,
+} from "@/lib/finance-queries";
+import type { Transaction } from "@/lib/finance-queries";
 
 export const Route = createFileRoute("/transactions")({
   head: () => ({
     meta: [
       { title: "Extrato — Cifra" },
       { name: "description", content: "Todas as suas movimentações financeiras em um só lugar." },
+      { property: "og:title", content: "Extrato — Cifra" },
+      {
+        property: "og:description",
+        content: "Todas as suas movimentações financeiras em um só lugar.",
+      },
     ],
   }),
   component: TransactionsPage,
 });
 
+const filters = ["Todos", "Entradas", "Saídas", "Transferências"] as const;
+
 function TransactionsPage() {
-  // Group by date label
-  const groups = transactions.reduce<Record<string, typeof transactions>>((acc, t) => {
-    (acc[t.date] ||= []).push(t);
-    return acc;
-  }, {});
+  const { session } = useAuth();
+  const on = !!session;
+  const { data: transactions = [] } = useTransactions(on);
+  const { data: accounts = [] } = useAccounts(on);
+  const remove = useDeleteTransaction();
+
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<(typeof filters)[number]>("Todos");
+
+  const groups = useMemo(() => {
+    const kindOf: Record<string, string> = {
+      Entradas: "income",
+      Saídas: "expense",
+      Transferências: "transfer",
+    };
+    const q = query.trim().toLowerCase();
+    const list = transactions.filter((t) => {
+      if (filter !== "Todos" && t.kind !== kindOf[filter]) return false;
+      if (!q) return true;
+      return (
+        t.merchant.toLowerCase().includes(q) ||
+        t.category.toLowerCase().includes(q) ||
+        String(t.amount).includes(q)
+      );
+    });
+    return list.reduce<Record<string, Transaction[]>>((acc, t) => {
+      const key = dateLabel(t.occurred_at).split(",")[0];
+      (acc[key] ||= []).push(t);
+      return acc;
+    }, {});
+  }, [transactions, query, filter]);
+
+  async function del(id: string) {
+    try {
+      await remove.mutateAsync(id);
+      toast.success("Transação excluída");
+    } catch (e) {
+      toast.error("Não foi possível excluir", {
+        description: e instanceof Error ? e.message : undefined,
+      });
+    }
+  }
 
   return (
     <MobileShell>
@@ -44,17 +97,20 @@ function TransactionsPage() {
           <Search className="size-4 text-white/40" />
           <input
             type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar por categoria, valor, conta…"
             className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/40 focus:outline-none"
           />
         </label>
 
         <div className="mt-4 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-          {["Todos", "Entradas", "Saídas", "Cartão", "Pix"].map((f, i) => (
+          {filters.map((f) => (
             <button
               key={f}
+              onClick={() => setFilter(f)}
               className={`h-9 shrink-0 rounded-full border px-4 text-xs font-medium ${
-                i === 0
+                filter === f
                   ? "border-accent bg-accent text-accent-foreground"
                   : "border-white/10 bg-surface text-white/70"
               }`}
@@ -66,6 +122,9 @@ function TransactionsPage() {
       </div>
 
       <div className="mt-6 space-y-6 px-5">
+        {Object.keys(groups).length === 0 && (
+          <p className="text-xs text-white/40">Nenhuma movimentação encontrada.</p>
+        )}
         {Object.entries(groups).map(([date, list]) => {
           const total = list.reduce(
             (s, t) => s + (t.kind === "income" ? t.amount : -t.amount),
@@ -88,8 +147,10 @@ function TransactionsPage() {
               </div>
               <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-card">
                 {list.map((t, idx) => {
-                  const Icon = t.icon;
+                  const Icon = iconFor(t.icon);
                   const positive = t.kind === "income";
+                  const accountName =
+                    accounts.find((a) => a.id === t.account_id)?.name ?? "—";
                   return (
                     <div
                       key={t.id}
@@ -109,7 +170,7 @@ function TransactionsPage() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{t.merchant}</p>
                         <p className="text-[11px] text-white/40">
-                          {t.category} • {t.account}
+                          {t.category} • {accountName}
                         </p>
                       </div>
                       <p
@@ -120,6 +181,13 @@ function TransactionsPage() {
                         {positive ? "+" : "−"}
                         {currency(t.amount)}
                       </p>
+                      <button
+                        onClick={() => del(t.id)}
+                        aria-label={`Excluir ${t.merchant}`}
+                        className="grid size-8 place-items-center rounded-full text-white/30 active:text-danger"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
                     </div>
                   );
                 })}
